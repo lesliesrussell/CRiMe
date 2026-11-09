@@ -1,0 +1,21 @@
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
+
+/target/
+*.duckdb
+*.duckdb.wal
+
+# Local project tools and private task data
+/.beads/
+/.dolt/
+/.agents/
+/.codex/
+/.claude/
+/.cursor/
+/AGENTS.md
+/CLAUDE.md
