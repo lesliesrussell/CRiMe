@@ -1,21 +1,42 @@
+# Build output
+/target/
 
-# Beads / Dolt files (added by bd init)
+# Private Beads / Dolt stores, runtime files, and credentials (at any depth)
+.beads/
+.beads-*/
 .dolt/
-*.db
+.doltcfg/
+.dolthub/
 .beads-credential-key
-.beads/proxieddb/
 *.gate.lock*
 
-/target/
-*.duckdb
-*.duckdb.wal
+# Private task exports, including copies outside .beads/
+issues.jsonl
+events.jsonl
+interactions.jsonl
+beads*.jsonl
+beads*.json
 
-# Local project tools and private task data
-/.beads/
-/.dolt/
-/.agents/
-/.codex/
-/.claude/
-/.cursor/
-/AGENTS.md
-/CLAUDE.md
+# Local project tools and agent instructions
+.agents/
+.codex/
+.claude/
+.cursor/
+AGENTS.md
+CLAUDE.md
+
+# Local databases and their journals / sidecars
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.duckdb
+*.duckdb.*
+
+# Local environment credentials
+.env
+.env.*
+!.env.example
+!.env.sample
