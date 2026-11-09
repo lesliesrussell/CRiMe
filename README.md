@@ -1,150 +1,377 @@
 # CRiMe
 
-A single-user Rust CRM with a terminal interface, command line, and stdio MCP server. Stores contacts, companies, deals, follow-up tasks, and activity notes in a local DuckDB file. Crossterm handles terminal input; Ratatui and TachyonFX render the interface; Tokio drives the MCP transport.
+Keep track of people, companies, deals, and the next thing you promised to do—all from your terminal.
 
-Requires Rust (edition 2024), a C++ compiler for bundled DuckDB, Python 3 for installation, and optionally `just`. The first build compiles DuckDB and can take several minutes.
+CRiMe is a personal CRM with guided forms, linked records, follow-up tasks, and a daily action list. Your records live in a local database. You can use the terminal interface without writing JSON, use the command line for scripts, or connect an AI assistant through MCP.
+
+**Start here:** [Install](#install) → [Create your first contact](#your-first-five-minutes) → [Build a daily routine](#your-daily-routine).
+
+## Install
+
+### What you need
+
+The instructions below use a macOS or Linux shell. Install these tools before building:
+
+- **Git** to download the source.
+- **Current stable Rust and Cargo** to compile CRiMe. If you do not have them, use the installer at [rustup.rs](https://rustup.rs), then reopen your terminal.
+- **A C/C++ compiler and platform build tools** because CRiMe builds DuckDB from source. On macOS, run `xcode-select --install`. On Debian/Ubuntu, install `build-essential` with your package manager.
+- **Python 3** for the installation script.
+
+Check that the tools are available:
 
 ```sh
-cargo test --locked
-just build
-just install                 # ~/.local/bin/crime
-just install /opt/my-prefix   # /opt/my-prefix/bin/crime
+git --version
+rustc --version
+cargo --version
+c++ --version
+python3 --version
 ```
 
-Add the selected prefix's `bin` directory to PATH. Installation prints the MCP server configuration. No administrator access is required for the default prefix. For a prefix you do not own, choose a writable directory or arrange its permissions first.
-
-Run `crime` or `crime tui` to open the terminal. Records appear as named entries and labeled details, including readable tags, nested fields, multiline notes, and linked contact/company names. JSON remains available in CLI/MCP output and advanced commands.
-
-Use `C-n` / `C-p` (Ctrl-N / Ctrl-P) to move, Tab / Shift-Tab to switch categories, or `M-1` through `M-6` to jump directly to All, Contacts, Companies, Deals, Tasks, or Notes, and `C-s` or `/` for live search. Press `n` to open a new-record form, `e` to edit all fields in the selected record, `s` to define that category’s reusable schema, and `M-x` (Alt-X) for a searchable action palette. `:` keeps the advanced command input. With the records panel focused, plain `d` immediately moves the selected record to trash; the category and search filter stay in place. `?`, F1, or `C-h` opens the scrollable key guide. `C-x o` switches focus between records and details; `C-v` / `M-v` or Page Down / Up scroll details. `C-g` cancels the current action or clears a filter. `C-x C-c` or `q` quits from browse mode. Standalone `C-c` is reserved for future application bindings and preserves the current action and input. Escape cancels; it does not quit.
-
-`M-x` opens a searchable command palette in the bottom quarter of the terminal, keeping the current screen visible above it, with action descriptions and shortcuts. Search for import, trash, schema, a theme name, or a custom category; Enter runs the selected action. `:` remains available for advanced commands.
-
-Press `r` to browse records linked to the current record in either direction, including custom types. Enter follows the selected relationship. `B` returns to the previous record with its category, search, saved view, and scroll position restored; repeated jumps keep a back stack.
-
-Use Space to select/unselect a record, `A` to select all visible records, and `C` to clear the selection. Checkmarks identify selected entries; selections persist across filters and categories. `U` opens bulk actions: `u` updates a named field (or `name`), `d` moves the selection to trash after `y` confirmation, and `e` exports the selected records to a new JSON file. Text values can be typed directly; numbers, booleans and lists use JSON syntax. Updates and trash operations are atomic and validate every selected record before committing. Existing export files are preserved.
-
-Select the record you want to keep and press `M` to merge a duplicate of the same type. Choose the duplicate, press Enter to review fields and conflicts, then F10 to commit. The survivor keeps its name and conflicting values; missing values are filled and lists are combined. Links in active records and trash recovery copies point to the survivor. Activity history is retained, and the duplicate's original record is archived separately from Trash. `crime run merges` shows these original snapshots. Merge is not undone by `u`; review the preview first. These actions are also searchable in the bottom command palette.
+### Build and install from source
 
 ```sh
+git clone https://github.com/lesliesrussell/CRiMe.git
+cd CRiMe
+cargo build --release --locked
+python3 scripts/install.py "$HOME/.local"
+```
+
+The first build can take several minutes while DuckDB compiles. The installer places the executable at `~/.local/bin/crime` and prints optional MCP configuration; you can ignore that configuration if you only want the terminal app.
+
+Add the install directory to your current shell's PATH:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+crime --version
+crime
+```
+
+To keep that PATH setting after reopening your terminal, add the `export` line to `~/.zshrc` for Zsh or `~/.bashrc` for Bash. On macOS with Bash, use `~/.bash_profile`.
+
+If you already use [just](https://github.com/casey/just), `just install` builds and installs to the same location. A custom prefix is supported too:
+
+```sh
+just install "$HOME/apps/crime"
+# Then add $HOME/apps/crime/bin to PATH.
+```
+
+You can also try the app without installing it:
+
+```sh
+./target/release/crime
+```
+
+### Update or uninstall
+
+To update, close CRiMe, return to your source checkout, and run:
+
+```sh
+git pull --ff-only
+cargo build --release --locked
+python3 scripts/install.py "$HOME/.local"
+```
+
+To uninstall the default installation, remove `~/.local/bin/crime`. This leaves your database in place. If you registered an MCP server, remove that registration in your assistant's settings as well.
+
+## Your first five minutes
+
+Run `crime`. It opens **Today**, your list of tasks and relationships needing attention. A new database starts empty.
+
+### 1. Create a company
+
+1. Press **Tab** until **Companies** is selected.
+2. Press **n** to open a new-company form.
+3. Select the name field, press **Enter**, type `Analytical Engines`, and press **Enter** to apply the text.
+4. Fill in any other fields you want. Use **Tab** or the arrow keys to move through the form and **Enter** to edit a field.
+5. Press **F10** to save. You can also use **Ctrl-X**, then **Ctrl-S**.
+
+### 2. Add a contact and link the company
+
+1. Switch to **Contacts** with **Tab** or **Shift-Tab**, then press **n**.
+2. Set the name to `Ada Lovelace` and add an email or phone number.
+3. Select the company link field and press **Enter**. Choose **Analytical Engines** by name.
+4. Save with **F10**.
+
+You now have two records connected by a relationship. You do not need to copy an ID or type JSON to link them.
+
+### 3. Record a conversation and schedule the next step
+
+With Ada selected in the record list:
+
+1. Press **a** to add an activity note. Give it a title and put your conversation notes in the body, then save.
+2. Press **f** to create a follow-up task linked to Ada. Give it a title such as `Send proposal`, enter a due date as `YYYY-MM-DD`, and save.
+3. Press **Esc** to leave the timeline, then **g** to open Today and find the task. Tasks due in the next seven days appear there; tasks further away are available in **Tasks**.
+4. When it is finished, select the task and press **x** to mark it done.
+
+Press **l** on Ada to see the relationship's timeline, including linked activity and changes. Press **Esc** to return to the record browser. From there, **r** browses related records, **Enter** follows one, and uppercase **B** goes back.
+
+### 4. Find your way around
+
+Press **Alt-X** to open the searchable action palette in the bottom quarter of the terminal. Type an action such as `import`, `schema`, `trash`, or `theme`, then press **Enter**. You can also find custom categories this way.
+
+Press **?** whenever you need the full key guide. **Esc** cancels an action or backs out of a screen. In the record browser, **q** quits.
+
+## Essential keys
+
+Uppercase and lowercase keys do different things. `Ctrl-X`, then `Ctrl-S` means press those two combinations in sequence. The on-screen guide abbreviates Ctrl as `C-` and Alt/Option as `M-`.
+
+| What you want to do | Key |
+| --- | --- |
+| Move through records or choices | Up / Down, or Ctrl-P / Ctrl-N |
+| Change category | Tab / Shift-Tab |
+| Search the current list | `/` or Ctrl-S |
+| Open the action palette | Alt-X |
+| Create / edit a record | `n` / `e` or Enter |
+| Save a form | F10, or Ctrl-X then Ctrl-S |
+| Cancel / go back | Esc or Ctrl-G |
+| Return to Today | `g` |
+| Add a note / follow-up for the selected record | `a` / `f` |
+| Complete the selected task | `x` |
+| View activity / related records | `l` / `r` |
+| Return after following a relationship | `B` |
+| Move a record to trash / undo the last deletion | `d` / `u` |
+| Open Trash | `b` |
+| Show the key guide | `?` or F1 |
+| Quit from the record browser | `q`, or Ctrl-X then Ctrl-C |
+
+Ctrl-C by itself is reserved; it does not quit. On terminals that reserve Alt shortcuts, use the single-letter keys or the key guide. If function keys control brightness or volume, use your keyboard's Fn key, or use Ctrl-X then Ctrl-S to save.
+
+## Your daily routine
+
+### Start with Today
+
+Press `g` to see overdue tasks, today's tasks, the next seven days, and tasks without dates. Today also highlights open deals without a follow-up, stale deals, and contacts needing attention. Completed or cancelled tasks and won or lost deals are excluded.
+
+Use `a` to log a conversation and `f` to schedule a next step while a contact or company is selected. Linked notes and completed follow-ups help CRiMe decide when a contact needs attention. A future `next_contact` date postpones that prompt; `follow_up_days` changes the default 30-day interval. Dates follow your local calendar.
+
+### Search, inspect, and follow links
+
+Switch to a category and press `/` to search names and field values as you type. Ctrl-G clears the search. Press `e` to edit the selected record.
+
+Press `r` to see records linked in either direction. Follow a company, contact, task, note, deal, or custom record with Enter. `B` returns to the previous location, including its category, filter, saved view, and scroll position.
+
+Ctrl-X then `o` switches focus between the record list and details. Page Up / Page Down scroll details. Press `l` for the activity timeline; deleted linked records can still appear in its history.
+
+### Save a view you use often
+
+Press `V` to turn the current category and search into a saved view. In the view editor, add conditions with F2, choose sorting and visible fields, then save with F10. Conditions are combined with AND. Date conditions can use `$today` so they stay current.
+
+Press `v` to open saved views. Starter views include **Overdue tasks**, **Active deals**, and **Contacts needing follow-up**. Views save rules and update as your records change.
+
+### Recover a deleted record
+
+With the record list focused, `d` immediately moves the selected record to trash. Press `u` to restore the most recent deletion, or `b` to choose a record from Trash and restore it with Enter or `r`.
+
+Restoration keeps the original ID, fields, links, and timestamps. In Trash, `d` followed by `y` removes the recovery copy permanently. Activity history remains.
+
+## Make the CRM fit your work
+
+### Add fields or your own categories
+
+Built-in categories are Contacts, Companies, Deals, Tasks, and Notes. Press `c` to create a category such as Projects or Vendors. Give it a display name and a stable lowercase ID, such as `project`; the schema editor opens next.
+
+A **schema** is the reusable set of fields and defaults for a category. Press `s` in that category to edit it:
+
+| In the schema editor | Key |
+| --- | --- |
+| Add a named field | F2 |
+| Remove a field | F3 |
+| Change a field's type | F5 |
+| Set a default value | Enter |
+| Set required, dropdown choices, or a description | F6 |
+| Move a field up / down | F7 / F9 |
+| Save a new schema version | F10 |
+
+Fields can hold text, numbers, yes/no values, dates, groups, lists, or links to records. Dropdown choices require a Text field; enter one choice per line using Ctrl-J. Required fields can have no default, but must be filled before a record can be saved.
+
+You can also add a field while editing an individual record with F2. That changes just that record; use the schema editor for fields you want on every new record. F4 adds a list item. Ctrl-J inserts a newline in text.
+
+Schema changes apply to new records. Existing records keep their applied schema version until you explicitly migrate them: open the record, press F8, review the changes, apply them to the draft, and save with F10. Cancel to leave the stored record unchanged.
+
+### Import a spreadsheet as CSV
+
+Export your spreadsheet as a CSV file with column headers. For example:
+
+```csv
+Name,Email,Phone,Tags
+Ada Lovelace,ada@example.com,555-0100,customer;priority
+Grace Hopper,grace@example.com,555-0101,partner
+```
+
+In CRiMe:
+
+1. Press `i` and enter the CSV file path.
+2. Choose the record category.
+3. Review the proposed column mappings. Press Enter on a column to change its destination or ignore it. One column must map to the record's name/title.
+4. Choose a duplicate match field, such as email, and a policy: **Skip**, **Merge mapped nonblank values**, or **Keep both**.
+5. Press F10 to preview the counts, sample values, and row errors.
+6. Fix any errors, then press F10 on the preview to import. Esc returns to the mappings.
+
+The preview does not write records. An import commits only when all rows validate. CSV merge preserves existing values in unmapped columns. Ambiguous duplicate matches are rejected.
+
+Use `YYYY-MM-DD` dates, semicolons between list items, and yes/no, true/false, or 1/0 for boolean fields. Links can use an existing record's name or ID. Quoted fields and multiline values are supported.
+
+### Change several records at once
+
+Space selects or unselects a record. `A` selects all visible records; `C` clears the selection. Checkmarks show what is selected. Selections persist when you change filters or categories.
+
+Press `U` to open bulk actions:
+
+- `u`: enter a field name and its new value. Use `name` to rename records. Plain text works directly; numbers, booleans, and lists use JSON syntax.
+- `d`: move the selection to trash after confirming with `y`.
+- `e`: export only the selected records to a new JSON file. Existing files are preserved.
+
+Updates and trash operations are atomic: if a selected record fails validation, the operation rolls back.
+
+### Merge duplicate records
+
+Select the record you want to **keep**, press `M`, and choose a duplicate of the same category. Enter opens a preview; F10 commits the reviewed merge.
+
+The survivor keeps its name and conflicting values. Missing values are filled from the duplicate, and lists are combined. Links in active records and trash copies point to the survivor. Both records' activity history is retained, and the duplicate's original values are archived.
+
+A merge is not undone by `u`. Review the preview before committing. Use `crime run merges` to inspect the archived source records later.
+
+### Choose a theme
+
+Press `T` to cycle Tokyo Night, Dracula, Solarized Dark, and Solarized Light. The choice is saved for this database. You can also search for a theme in the action palette or choose one at launch:
+
+```sh
+crime tui --theme dracula
+crime tui --theme solarized-light
+```
+
+## Use the command line
+
+Close the terminal app before using a separate CLI process against the same database. Commands return JSON; record creation returns an `id` that you can use in later commands.
+
+```sh
+crime add contact 'Ada Lovelace' --data '{"email":"ada@example.com"}'
+crime list --kind contact --search Ada
+crime add task 'Send proposal' --data '{"due":"2026-12-01","status":"open"}'
+crime today
+crime views
+crime view 'Overdue tasks'
+```
+
+Replace `RECORD_ID` below with the ID returned by `add` or `list`:
+
+```sh
+crime get RECORD_ID
+crime update RECORD_ID --data '{"phone":"555-0100"}'
+crime timeline RECORD_ID
 crime related RECORD_ID
-crime merge SURVIVOR_ID DUPLICATE_ID --preview
-crime merge SURVIVOR_ID DUPLICATE_ID
-crime bulk update '["ID1","ID2"]' --data '{"status":"active"}'
-crime bulk export '["ID1","ID2"]'
-crime bulk trash '["ID1","ID2"]'
+crime delete RECORD_ID
+crime undo
+crime export > records.json
 ```
 
-MCP/shared commands use `related ID`, `merge-preview SURVIVOR_ID SOURCE_ID`, `merge SURVIVOR_ID SOURCE_ID`, `merges`, and `bulk update|trash|export IDS_JSON [PATCH_JSON]`. Record-only exports omit the merge archive; database backups include it.
+To link a task or note to a contact from the CLI, put the contact's ID in its `contact_id` field. Company links use `company_id`. Updates merge top-level fields; extra fields are allowed, while saved schemas enforce their field types and rules.
 
-`d` still removes the current record immediately from the active list, but now `u` restores the most recent deletion. `b` opens Trash, where Enter or `r` restores a chosen record with its original ID, fields, schema version, timestamps, and links. Removing a recovery copy with `d` in Trash requires `y` confirmation. Activity history remains even after a trash copy is removed. Record-only export excludes trash; database-file backups include it.
-
-Press `c` or choose **New record type** in the palette to create a category such as Projects or Vendors. Give it a display name and stable lowercase ID; its schema editor opens next. Custom types work in forms, links, views, CSV imports, CLI and MCP. Tab cycles all categories, `M-1` through `M-9` select the first nine (including All), and the palette can select any category.
-
-In the schema editor, `F6` opens field rules: Required, dropdown choices (Text fields, one choice per line using `C-j`), and descriptions shown during data entry. `F7` / `F9` move the field up/down. Types, rules, descriptions and order persist with the schema version. A required field may have no default; users must fill it before saving. Existing records keep their applied schema until explicitly migrated. New records created through CLI/MCP receive schema defaults and validation too.
-
-Press `i` or choose **Import CSV** in the palette. Choose a file and record type, review automatic mappings, and press Enter on a column to change its destination or ignore it. One column must map to Name/title. Choose a duplicate match field and a policy: Skip, Merge mapped nonblank values, or Keep both. `F10` first shows a preview with counts, sample values and row errors; `F10` on the preview commits the import only when all rows validate. Escape returns to mappings. Dates use YYYY-MM-DD, yes/no values accept yes/no, true/false or 1/0, list cells use semicolons, and links match existing record names or IDs. Quoted CSV fields and multiline values are supported. Imports are atomic; no partial rows are saved on failure. Merge preserves unmapped existing values; ambiguous matches are rejected.
+Preview a CSV import before running it without `--preview`:
 
 ```sh
-crime types
-crime type-add project Projects
-crime schema project
-crime trash
-crime undo
-crime restore RECORD_ID
 crime import-csv people.csv --kind contact --preview
 crime import-csv people.csv --kind contact --duplicates merge --match-field email
 crime import-csv people.csv --kind contact --name-column 'Full Name' --map 'Email Address=email'
 ```
 
-The shared MCP/`run` commands include `types`, `type-add ID LABEL`, `schema KIND`, `schema-save KIND JSON`, `trash`, `undo`, `restore ID`, `trash-purge ID`, and `import-preview PATH KIND CONFIG_JSON` / `import-csv PATH KIND CONFIG_JSON`. A schema document contains `version` (expected current version), `template`, `hints`, and `controls`; read `schema KIND` before modifying it. CSV config contains `kind`, `mapping` (zero-based column indexes to `name` or `/data/field` paths), `duplicate_field`, and `duplicates` (`skip`, `merge`, `keep_both`). CLI `--map 'Header=-'` ignores a column; full `/data/...` paths map nested fields. Import previews are recomputed for CLI/MCP requests; the TUI checks that records/schema have not changed before committing its preview.
-
-The TUI opens on **Today**. Press `g` or `M-0` to return to it. It lists overdue and due-today tasks, the next seven days, tasks without dates, invalid dates to fix, open deals without a follow-up task, stale deals, and contacts needing attention. Completed/cancelled tasks and won/lost deals are excluded. `x` completes the selected task; Enter or `e` edits it. `M-1` through `M-6` still open the ordinary record categories.
-
-Press `l` on a contact (or another record) for its unified timeline: linked notes, tasks, deals, open follow-ups, and recorded changes, including deleted linked records. `a` logs a linked activity note; `f` schedules a linked follow-up. These open regular forms and return to the parent timeline on save. Notes can use an `occurred_on` date. Today counts linked notes and completed follow-ups when checking contact activity; `last_contacted`, `next_contact`, and `follow_up_days` can override the default 30-day follow-up cadence. Audit history starts with this version; pre-existing records show a creation fallback, not invented historical edits. Activity history is retained when a record is deleted.
-
-Press `v` for saved views or `V` to save the current category/search as a new view. The guided view editor configures record type, a rolling base filter, search text, multiple AND conditions, sorting, and visible fields. Enter edits a setting, `F2` adds a condition, `F3` removes the selected condition, and `F10` saves. Space toggles fields in the visible-columns chooser. Date conditions accept YYYY-MM-DD or `$today`, which updates daily. Starter views include Overdue tasks, Active deals, and Contacts needing follow-up; they can be edited or deleted. Views store rules, not frozen results, and update when records change. Edits made from a view return to that view.
-
-The same workflows work through the CLI and MCP `crm` tool:
+Use `crime --help` or `crime COMMAND --help` for flags. `crime run help` lists the shared command syntax used by the advanced terminal input (`:`) and MCP. For example:
 
 ```sh
-crime today
-crime today --date 2026-11-09
-crime timeline RECORD_ID
-crime views
-crime view 'Overdue tasks'
-# Shared MCP/command syntax:
-crime run view-save '{"name":"Open tasks","kind":"task","filters":[{"field":"status","op":"equals","value":"open"}],"sort":"due","columns":["due","contact_id"]}'
-crime run view-delete 'Open tasks'
+crime run add contact 'Grace Hopper' '{"email":"grace@example.com"}'
+crime run list contact Grace
 ```
 
-Dates in Today use the local calendar. Contact follow-ups honor a future `next_contact`/`next_contact_date`; otherwise a contact with no recorded interactions is eligible immediately. Stale deals have had no record update in over 30 days. Missing sort values stay last, and numeric values sort numerically. Database-file backups include views and activity history; record-only JSON export does not include those tables.
+## Connect an AI assistant with MCP
 
-Data entry is guided on screen; no JSON or documentation is needed. In All, `n` first asks whether to create a contact, company, deal, task, or note. In a specific category it opens that form directly. Until you save a schema, each type starts with suggested fields and fields discovered in existing data. Once saved, your schema fully controls new-record forms, including defaults and field types. `e` opens the full edit form.
+CRiMe includes a stdio MCP server in the same executable. Your assistant launches it when needed; you do not need to start a background service yourself.
 
-In a form, Tab or `C-n/p` selects a field and Enter edits it. Numbers and dates validate with examples, yes/no and status fields offer choices, and links show record names. Text supports Emacs editing and `C-j` for a new line. `F2` always asks for a custom field name, then its type (text, number, yes/no, date, group, list, or record link). `F4` (or Enter on a list) adds a list item separately. Groups and lists expand into editable child fields; `F3` removes a field or item from the draft. Custom field types are remembered, even when a value is not set.
+1. Install CRiMe first.
+2. Close the TUI so the assistant can open the same database.
+3. Generate a server definition:
 
-`F10` or `C-x C-s` saves the complete record. Escape or `C-g` backs out of the current step; leaving a changed form offers Keep editing or Discard changes. Nothing is written until Save. Existing nested objects, arrays, numbers, and unknown fields are preserved while editing other fields. The CLI and MCP interfaces continue to accept flexible JSON.
+   ```sh
+   crime mcp-config
+   ```
 
-Press `s` in the records view to edit a reusable schema. All asks which record type; a category opens its schema directly. Add named fields with `F2`, remove them with `F3`, change their type with `F5` (clears the draft default), and use Enter to set defaults. `F6` configures required values, dropdown choices and descriptions; `F7`/`F9` adjusts field order. `F10` or `C-x C-s` publishes a new schema version. Starter fields can be removed, and an empty schema is allowed. Saving a schema does not rewrite any records. Fields added inside a normal record form are specific to that record; add reusable fields in the schema editor instead.
+4. Merge the printed `mcpServers.crime` entry into your MCP client's configuration, preserving its other servers. It contains the absolute executable and database paths. If your client uses a server setup form, use that executable as the command and the printed `args` array as its arguments.
+5. Reload or restart the client, enable the `crime` server, and try: “Show my overdue tasks” or “Add Ada Lovelace as a contact with email ada@example.com.”
 
-Existing records open exactly as saved. Their edit form shows the applied and current schema versions (`0` means unversioned/starter). `F8` previews migration to the latest saved schema: missing fields receive defaults, compatible values are converted, and extra fields are retained. Incompatible values are listed as conflicts; use `F5` and edit the field to resolve them before retrying. Page Up/Down scrolls the preview. Choose Apply migration to draft, then `F10` to commit; cancelling leaves the stored record unchanged. Schemas, their revisions, defaults, and record version markers live in the DuckDB database and are included in a database-file backup. CLI/MCP record JSON includes `schema_version`; flexible JSON commands remain available.
-
-After `C-x`, the status area immediately lists the available next keys: `b` for category, `o` for focus, `C-c` to quit, and `C-g` or Escape to cancel. The pending hint clears when the sequence finishes. The footer shows control-key guidance for the current focus or minibuffer before you use it.
-
-The minibuffer supports `C-a/e` (line start/end), `C-b/f` (character), `M-b/f` (word), `C-d` (delete), `C-k/u` (kill to end/start), `C-w` / `M-d` (kill word), and `C-y` (yank). `C-p/n` recalls command history for the current session. Arrow keys work too. Terminals may reserve some shortcuts; `:` and `/` provide alternatives to Meta-X and Ctrl-S.
-
-Press `T` to cycle Tokyo Night, Dracula, Solarized Dark, and Solarized Light. The choice is saved with this CRM database. You can also run `theme dracula` in the minibuffer. To override the saved choice for a session:
+For Claude Desktop on macOS, the configuration file is `~/Library/Application Support/Claude/claude_desktop_config.json`. For clients that accept the registration commands used by the included script, run one of these from your source checkout:
 
 ```sh
-crime tui --theme dracula
-crime tui --theme solarized-light
-CRIME_THEME=tokyo-night crime tui
+python3 scripts/install_mcp.py codex
+python3 scripts/install_mcp.py claude
 ```
 
-Theme palettes follow [Dracula](https://github.com/dracula/dracula-theme), [Solarized](https://ethanschoonover.com/solarized/), and [Tokyo Night](https://github.com/folke/tokyonight.nvim). A true-color terminal gives the best color match.
+These register the installed executable in the client's user configuration; `claude` here means Claude Code, not Claude Desktop. For a custom installation or database, use `--prefix` and `--db`:
 
 ```sh
-crime add company 'Analytical Engines' --data '{"website":"https://example.com"}'
-crime run add contact 'Ada Lovelace' '{"email":"ada@example.com","tags":["customer"]}'
-crime run list contact Ada
-crime run add deal 'Engine order' '{"stage":"qualified","value":1200,"currency":"USD"}'
-crime run add task 'Call Ada' '{"due":"2026-12-01","status":"open"}'
-crime run add note 'Discovery call' '{"body":"Interested in a demonstration"}'
-crime run update RECORD_ID '{"status":"done"}'
-crime run get RECORD_ID
-crime run delete RECORD_ID
-crime run export > backup.json
+python3 scripts/install_mcp.py codex --prefix "$HOME/apps/crime" --db /absolute/path/crm.duckdb
 ```
 
-Names are required; additional fields are JSON objects. Link records by putting their IDs in `contact_id` or `company_id`. Saved schemas enforce field types, required values, and dropdown choices on new records and edits at the record’s applied schema version. Extra fields remain allowed; links retain IDs without enforcing referential integrity. `update` merges top-level fields and accepts `name` to rename a record. Deleted records are recoverable from trash. Export returns all records as JSON.
+The MCP tool is named `crm` and accepts an `args` array. `{"args":["help"]}` lists available commands. Your assistant can read and change records through this tool according to the approvals you grant in its client. Records are stored locally, but any content you ask an assistant to read is also shared with that assistant.
 
-The default database uses the platform's application data directory (`~/Library/Application Support/crime/crm.duckdb` on macOS). Override with `--db /absolute/path/crm.duckdb` or `CRIME_DB`. All three interfaces must use the same database path to share records. DuckDB permits one writer process: exit the TUI before running a separate CLI or MCP process against that database. Back up the database while CRiMe is stopped.
+## Where your data lives
 
-## MCP setup
+CRiMe creates its database automatically on first use. By default it uses your operating system's application data directory; on macOS that is:
 
-`crime mcp` is the MCP server; there is no separate server executable to install. It reserves stdout for newline-delimited JSON-RPC. Generate configuration after installing:
+```text
+~/Library/Application Support/crime/crm.duckdb
+```
+
+To see the exact absolute path on your system, run `crime mcp-config` and read the database path in `args`. You do not need an MCP client to run that command.
+
+Choose a different database with either of these:
 
 ```sh
-crime mcp-config
-crime --db /absolute/path/crm.duckdb mcp-config
+crime --db "$HOME/Documents/my-crm.duckdb"
+CRIME_DB="$HOME/Documents/my-crm.duckdb" crime
 ```
 
-Merge the generated `mcpServers.crime` entry into your MCP client's JSON settings, preserving existing servers. Claude Desktop on macOS uses `~/Library/Application Support/Claude/claude_desktop_config.json`; other clients can import the same server definition or register its command and arguments. Restart the client after editing configuration.
-
-For clients with a command registration interface, register the absolute installed `crime` executable with arguments `--db /absolute/path/crm.duckdb mcp`. The database flag goes before `mcp`. Use the same absolute database path across clients. The server exposes a `crm` tool taking `{"args":["help"]}` or any documented CRM command array. The client controls tool approval; all data remains in your local database.
-
-Run `just check` for formatting and Clippy, `just test` for persistence and protocol integration tests, and `just test-install` to exercise the installed CLI/MCP in a temporary prefix. No background service is needed.
-
-Register the installed server using your client's supported CLI:
+Use the same absolute database path in the TUI, scripts, and MCP configuration if you want them to share records. Different paths create separate CRMs. A convenient way to explore safely is to launch a separate practice database:
 
 ```sh
-just install-mcp codex
-just install-mcp claude
-just install-mcp codex /opt/my-prefix
-# Optional explicit database:
-python3 scripts/install_mcp.py codex --prefix /opt/my-prefix --db /absolute/path/crm.duckdb
+crime --db "$HOME/Documents/crime-practice.duckdb"
 ```
 
-The Codex recipe calls `codex mcp add crime -- /absolute/prefix/bin/crime mcp`; Claude Code uses `claude mcp add --transport stdio --scope user crime -- ...`. These commands modify the client's user configuration when you run them. Claude Desktop uses the JSON definition printed by `crime mcp-config` instead. See [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp) and [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp).
+DuckDB allows only one writer process for a database. Exit the TUI before running a CLI command or letting an MCP client launch another server against that file. Stop the MCP server in your client before reopening the TUI.
 
-Direct CLI commands include `crime add contact Ada --data '{"email":"ada@example.com"}'`, `crime list --kind contact --search Ada`, `crime get ID`, `crime update ID --data '{"phone":"123"}'`, `crime delete ID`, and `crime export`. `crime run` remains available for the shared TUI/MCP command syntax.
+### Back up your records
+
+For a complete backup, stop all CRiMe processes and copy the database file to a safe location. A cleanly closed database includes records, custom categories, schemas and revisions, views, preferences, trash, activity history, and merge archives. To restore, keep a copy of your current database, then replace it with the backup while CRiMe is stopped.
+
+`crime export > records.json` exports active records only. It is useful for inspecting or moving record data, but is **not a full backup**: it omits schemas, views, trash, history, preferences, and merge archives. CSV import does not restore a JSON database export. Backup and restore are currently manual.
+
+## Troubleshooting
+
+| Problem | What to try |
+| --- | --- |
+| `crime: command not found` | Run `export PATH="$HOME/.local/bin:$PATH"`, or launch `~/.local/bin/crime` directly. If you used another prefix, use its `bin` directory. |
+| A build reports a missing compiler or linker | Install the platform C/C++ build tools, reopen the terminal, and run `cargo build --release --locked` again. |
+| Rust is too old for a dependency | Update your stable toolchain with `rustup update stable`, then rebuild. |
+| The first build takes a long time | DuckDB compiles from source. Allow the build to finish; subsequent builds usually reuse it. |
+| “Cannot open CRM database” or a lock error | Close the TUI, other CLI processes, or the MCP server using that database. |
+| Records appear to be missing | Check the selected category and search filter, then verify that you are using the same database path. Look in Trash with `b` if you deleted a record. |
+| Alt shortcuts do not work | Your terminal may reserve them. Use Tab, single-letter actions, and `?` for alternatives. On macOS, Option may need to be configured as Meta/Alt in your terminal. |
+| F10 changes volume or brightness | Hold Fn while pressing F10, or save with Ctrl-X then Ctrl-S. |
+| The terminal says it is too small | Enlarge the window; the main browser needs at least 45 columns by 10 rows. Import and other tools need more space. |
+| A record will not save | Check required fields, dropdown choices, and date format. To leave a changed form, press Esc and choose whether to discard the draft. |
+| The assistant cannot start CRiMe | Regenerate `crime mcp-config`, check its absolute executable path, and make sure the database is not already open in the TUI. |
+
+## Development
+
+With `just` installed:
+
+```sh
+just check          # formatting and Clippy
+just test           # unit and CLI/MCP integration tests
+just build          # release executable
+just test-install   # temporary-prefix installation and MCP registration checks
+```
+
+The application uses Rust, Ratatui/Crossterm, and DuckDB. The installation check uses a temporary directory and does not change your real assistant settings.
+
+## License
+
+CRiMe is available under the [MIT License](LICENSE). You may use, modify, and redistribute it under that license's terms.
